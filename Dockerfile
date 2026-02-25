@@ -11,7 +11,7 @@ RUN apk add --no-cache \
 COPY --from=linuxserver/unrar:latest /usr/bin/unrar-alpine /usr/local/bin/unrar
 
 # Install organize
-RUN pip install --no-cache-dir organize
+RUN pip install --no-cache-dir organize-tool
 
 # Copy scripts
 COPY entrypoint.sh /entrypoint.sh
