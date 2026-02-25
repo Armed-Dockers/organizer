@@ -3,6 +3,18 @@ set -eu
 
 LOCK_FILE="/tmp/organize.lock"
 
+# Only do permission fix if running as root
+if [ "$(id -u)" = "0" ]; then
+    echo "Fixing permissions..."
+
+    mkdir -p /organize
+
+    chown -R "$PUID:$PGID" /organize
+
+    # Drop privileges and restart script as target user
+    exec su-exec "$PUID:$PGID" "$0" "$@"
+fi
+
 log() {
     echo "[$(date)] $1" | tee -a "$LOG_FILE"
 }
