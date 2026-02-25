@@ -1,27 +1,22 @@
 FROM python:3.11-alpine
 
-# Install required packages
+# Install dependencies
 RUN apk add --no-cache \
-    su-exec \
-    p7zip \
     inotify-tools \
-    util-linux
+    util-linux \
+    p7zip \
+    su-exec
 
-# Copy unrar binary from linuxserver image
+# Copy unrar binary from LinuxServer image
 COPY --from=linuxserver/unrar:latest /usr/bin/unrar-alpine /usr/local/bin/unrar
 
 # Install organize
-RUN pip install --no-cache-dir organize-tool
+RUN pip install --no-cache-dir organize
 
-WORKDIR /app
-
+# Copy scripts
 COPY entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY organize-wrapper.sh /usr/local/bin/organize-wrapper.sh
 
-# Default environment
-ENV WATCH_DIRS=/downloads
-ENV ORGANIZE_CONFIG=/config/config.yaml
-ENV LOG_FILE=/logs/organize.log
-ENV DEBOUNCE_SECONDS=15
+RUN chmod +x /entrypoint.sh /usr/local/bin/organize-wrapper.sh
 
 ENTRYPOINT ["/entrypoint.sh"]
