@@ -14,36 +14,68 @@ cleanup() {
 
 trap cleanup INT TERM
 
-mkdir -p "$(dirname "$LOG_FILE")"
-touch "$LOG_FILE"
+# ---- Validate required env vars ----
 
-log "Starting organize service"
-log "Watching: $DOWNLOADS"
-log "Quiet window: $DEBOUNCE_SECONDS seconds"
+if [ -z "${WATCH_DIRS:-}" ]; then
+    echo "WATCH_DIRS is not set"
+    exit 1
+fi
+
+if [ -z "${ORGANIZE_CONFIG:-}" ]; then
+    echo "ORGANIZE_CONFIG is not set"
+    exit 1
+fi
+
+mkdir -p "$(dirname "$LOG_FILE")" || true
+touch "$LOG_FILE" || true
+
+# ---- Convert comma-separated dirs into array ----
+
+IFS=',' read -ra DIRS <<EOF
+$WATCH_DIRS
+EOF
+
+# ---- Run organize safely ----
 
 run_organize() {
     log "Running organize..."
+
     flock "$LOCK_FILE" -c "
-        organize run \"$ORGANIZE_CONFIG\" >> \"$LOG_FILE\" 2>&1
+        /usr/local/bin/organize run \"$ORGANIZE_CONFIG\" >> \"$LOG_FILE\" 2>&1
     "
-    log "Organize run finished"
+
+    log "Organize run finished."
 }
 
-# Optional initial run
+# ---- Watcher with smart debounce ----
+
+watcher() {
+    while true; do
+        # Wait for first filesystem event in any watched dir
+        inotifywait -r -e create -e moved_to -e close_write "${DIRS[@]}" >/dev/null 2>&1
+
+        log "Filesystem event detected. Waiting for quiet window ($DEBOUNCE_SECONDS seconds)..."
+
+        # Reset timer if more events occur
+        while inotifywait -r -e create -e moved_to -e close_write \
+            --timeout "$DEBOUNCE_SECONDS" "${DIRS[@]}" >/dev/null 2>&1
+        do
+            log "More filesystem events detected. Resetting quiet timer..."
+        done
+
+        log "Quiet period reached. Executing organize."
+        run_organize
+    done
+}
+
+# ---- Startup ----
+
+log "Starting organize service"
+log "Watching directories: $WATCH_DIRS"
+log "Quiet window: $DEBOUNCE_SECONDS seconds"
+
+# Optional: initial run on startup
 run_organize
 
-while true
-do
-    inotifywait -r -e create -e moved_to -e close_write "$DOWNLOADS" >/dev/null 2>&1
-
-    log "Event detected. Waiting for quiet period..."
-
-    while inotifywait -r -e create -e moved_to -e close_write \
-        --timeout "$DEBOUNCE_SECONDS" "$DOWNLOADS" >/dev/null 2>&1
-    do
-        log "New event detected. Resetting timer..."
-    done
-
-    log "Quiet period reached. Executing organize."
-    run_organize
-done
+# Start watcher loop
+watcher
