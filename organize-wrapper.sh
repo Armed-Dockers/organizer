@@ -74,18 +74,13 @@ run_organize_inotify() {
     log "Organize run finished (inotify config)."
 }
 
-run_organize_scheduled() {
-    log "Running organize (scheduled config)..."
-    flock "$LOCK_FILE" -c "organize run \"$SCHEDULED_ORGANIZE_CONFIG\" >> \"$LOG_FILE\" 2>&1"
-    log "Organize run finished (scheduled config)."
-}
-
 # -------------------------
 # Cron setup for scheduled runs
 # -------------------------
 
 setup_cron() {
     mkdir -p "$CRON_DIR"
+    mkdir -p "$(dirname "$CRON_FILE")"
 
     cat > "$CRON_FILE" <<CRON
 SHELL=/bin/sh
@@ -101,9 +96,8 @@ CRON
     log "Cron config path: $CRON_FILE"
     log "Cron log file: $CRON_LOG_FILE"
 
-    crond -c "$CRON_DIR" -f -l 8 -L "$CRON_LOG_FILE" &
-    CRON_PID=$!
-    log "Cron daemon started (PID $CRON_PID)."
+    crond -c "$CRON_DIR" -l 8 -L "$CRON_LOG_FILE"
+    log "Cron daemon started."
 }
 
 # -------------------------
@@ -112,7 +106,11 @@ CRON
 
 watcher() {
     while true; do
-        inotifywait -r -e create -e moved_to -e close_write $DIRS >/dev/null 2>&1
+        if ! inotifywait -r -e create -e moved_to -e close_write $DIRS >/dev/null 2>&1; then
+            log "inotifywait failed for WATCH_DIRS=$WATCH_DIRS. Retrying in ${WATCH_RETRY_SECONDS:-5}s..."
+            sleep "${WATCH_RETRY_SECONDS:-5}"
+            continue
+        fi
 
         log "Filesystem event detected. Waiting for quiet window (${DEBOUNCE_SECONDS:-15}s)..."
 

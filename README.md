@@ -20,6 +20,7 @@ Organize files automatically using both:
 ### Optional
 
 - `DEBOUNCE_SECONDS` (default: `15`): quiet window before inotify run starts
+- `WATCH_RETRY_SECONDS` (default: `5`): delay before retry if inotify watch setup fails
 - `LOCK_FILE` (default: `/tmp/organize.lock`): lock file preventing concurrent runs
 - `LOG_MAX_SIZE_MB` (default: `10`): log rotation size threshold
 - `LOG_BACKUPS` (default: `3`): number of rotated log backups
